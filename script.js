@@ -1,383 +1,346 @@
-canvas.style.width = canvas.width + "px";
-canvas.style.height = canvas.height + "px";
-
-const canvas = document.getElementById("gameCanvas");
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-const goldText = document.getElementById("goldText");
-const foodText = document.getElementById("foodText");
-const gemText = document.getElementById("gemText");
+const goldEl = document.getElementById("gold");
+const foodEl = document.getElementById("food");
+const gemEl = document.getElementById("gem");
 
+const market = document.getElementById("market");
 const marketBtn = document.getElementById("marketBtn");
-const marketPanel = document.getElementById("marketPanel");
-const closeMarket = document.getElementById("closeMarket");
-const buyBtns = document.querySelectorAll(".buyBtn");
+const closeBtn = document.getElementById("closeBtn");
 
-const TILE = 64;
-const COLS = 12;
-const ROWS = 8;
+let W, H;
+function resize() {
+  W = canvas.width = innerWidth;
+  H = canvas.height = innerHeight;
+}
+resize();
+addEventListener("resize", resize);
 
-let gold = 500;
-let food = 100;
-let gems = 25;
+const TILE_W = 64;
+const TILE_H = 32;
+const MAP_W = 14;
+const MAP_H = 14;
 
-let selectedBuy = null;
+let camX = 0;
+let camY = 90;
+
+let gold = 800;
+let food = 150;
+let gem = 30;
+let selected = null;
 let time = 0;
 
 const elements = {
-  fire: {
-    name: "Ateş",
-    body: "#ff4a22",
-    wing: "#ffb000",
-    horn: "#fff0a0"
-  },
-  water: {
-    name: "Su",
-    body: "#249bff",
-    wing: "#7ee6ff",
-    horn: "#d9fbff"
-  },
-  nature: {
-    name: "Doğa",
-    body: "#34c759",
-    wing: "#9dff72",
-    horn: "#fff7b0"
-  },
-  electric: {
-    name: "Elektrik",
-    body: "#ffe03b",
-    wing: "#fff8a8",
-    horn: "#4c3bff"
-  },
-  shadow: {
-    name: "Gölge",
-    body: "#3b2a58",
-    wing: "#8d5cff",
-    horn: "#d8c7ff"
-  }
+  fire: ["#ff4b20", "#ffb000"],
+  water: ["#1b9cff", "#8eeeff"],
+  nature: ["#30c85a", "#b8ff74"],
+  electric: ["#ffe436", "#ffffff"],
+  shadow: ["#342047", "#9d64ff"]
 };
 
 const map = [];
 const dragons = [];
 const particles = [];
 
-for (let y = 0; y < ROWS; y++) {
+for (let y = 0; y < MAP_H; y++) {
   const row = [];
-  for (let x = 0; x < COLS; x++) {
+  for (let x = 0; x < MAP_W; x++) {
+    let type = "grass";
+
+    if (x === 6 || y === 6) type = "path";
+    if ((x < 3 && y > 9) || (x > 10 && y < 3)) type = "water";
+
     row.push({
-      type: "grass",
-      habitat: null,
+      type,
+      object: null,
       deco: Math.random()
     });
   }
   map.push(row);
 }
 
-function updateHud() {
-  goldText.textContent = Math.floor(gold);
-  foodText.textContent = Math.floor(food);
-  gemText.textContent = Math.floor(gems);
+const startObjects = [
+  [2,2,"tree"], [3,2,"tree"], [10,9,"tree"],
+  [8,3,"rock"], [1,11,"rock"], [12,4,"rock"],
+  [4,6,"flower"], [7,7,"flower"], [11,10,"flower"],
+  [5,4,"habitat"], [8,8,"habitat"]
+];
+
+for (const [x,y,type] of startObjects) {
+  map[y][x].object = type;
 }
 
-function screenToTile(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-
-  const mx = (clientX - rect.left) * scaleX;
-  const my = (clientY - rect.top) * scaleY;
-
-  const ox = 96;
-  const oy = 64;
-
-  const x = Math.floor((mx - ox) / TILE);
-  const y = Math.floor((my - oy) / TILE);
-
-  return { x, y };
+function iso(x, y) {
+  return {
+    x: W / 2 + (x - y) * TILE_W / 2 + camX,
+    y: 80 + (x + y) * TILE_H / 2 + camY
+  };
 }
 
-function drawPixelRect(x, y, w, h, color) {
+function hud() {
+  goldEl.textContent = Math.floor(gold);
+  foodEl.textContent = Math.floor(food);
+  gemEl.textContent = Math.floor(gem);
+}
+
+function drawDiamond(cx, cy, color) {
   ctx.fillStyle = color;
-  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + TILE_W / 2, cy + TILE_H / 2);
+  ctx.lineTo(cx, cy + TILE_H);
+  ctx.lineTo(cx - TILE_W / 2, cy + TILE_H / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(0,0,0,.1)";
+  ctx.stroke();
 }
 
 function drawTile(x, y, tile) {
-  const px = 96 + x * TILE;
-  const py = 64 + y * TILE;
+  const p = iso(x, y);
 
-  const base1 = "#69d84f";
-  const base2 = "#5fc746";
+  let color = "#67d957";
+  if (tile.type === "path") color = "#d8c49a";
+  if (tile.type === "water") color = "#41bfff";
 
-  drawPixelRect(px, py, TILE, TILE, (x + y) % 2 === 0 ? base1 : base2);
+  drawDiamond(p.x, p.y, color);
 
-  ctx.strokeStyle = "rgba(0,0,0,.08)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(px, py, TILE, TILE);
-
-  if (tile.deco > .72) {
-    drawPixelRect(px + 10, py + 12, 8, 8, "#3ebf3e");
-    drawPixelRect(px + 42, py + 40, 10, 10, "#45b937");
+  if (tile.type === "grass" && tile.deco > .82) {
+    ctx.fillStyle = "#2ca943";
+    ctx.fillRect(p.x - 5, p.y + 13, 8, 8);
   }
 
-  if (tile.habitat) {
-    drawHabitat(px, py, tile.habitat);
+  if (tile.type === "water") {
+    ctx.fillStyle = "rgba(255,255,255,.55)";
+    ctx.fillRect(p.x - 18, p.y + 15, 20, 3);
   }
 }
 
-function drawHabitat(px, py, type) {
-  drawPixelRect(px + 8, py + 12, 48, 42, "#8b5a2b");
-  drawPixelRect(px + 12, py + 8, 40, 12, "#d99038");
-  drawPixelRect(px + 16, py + 24, 32, 26, "#ffe0a3");
-
-  drawPixelRect(px + 20, py + 30, 10, 20, "#6e3b1b");
-  drawPixelRect(px + 34, py + 30, 10, 20, "#6e3b1b");
-
-  ctx.strokeStyle = "rgba(60,30,10,.5)";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(px + 8, py + 12, 48, 42);
-
-  drawPixelRect(px + 4, py + 50, 56, 8, "#3ba64a");
+function pxRect(x,y,w,h,c) {
+  ctx.fillStyle = c;
+  ctx.fillRect(Math.round(x), Math.round(y), w, h);
 }
 
-function drawDragon(dragon) {
-  const el = elements[dragon.element];
+function drawTree(x, y) {
+  const p = iso(x, y);
+  pxRect(p.x - 6, p.y - 20, 12, 38, "#8a4e20");
+  pxRect(p.x - 26, p.y - 48, 52, 24, "#2fad45");
+  pxRect(p.x - 20, p.y - 64, 40, 24, "#43c95a");
+}
 
-  const flap = Math.sin(time * 0.18 + dragon.id) * 5;
-  const bob = Math.sin(time * 0.08 + dragon.id) * 3;
+function drawRock(x, y) {
+  const p = iso(x, y);
+  pxRect(p.x - 18, p.y - 10, 36, 20, "#8c98a3");
+  pxRect(p.x - 10, p.y - 22, 24, 16, "#b9c2ca");
+}
 
-  const x = dragon.x;
-  const y = dragon.y + bob;
+function drawFlower(x, y) {
+  const p = iso(x, y);
+  pxRect(p.x - 3, p.y - 8, 6, 14, "#2e9d41");
+  pxRect(p.x - 10, p.y - 15, 8, 8, "#ff4b8a");
+  pxRect(p.x + 3, p.y - 15, 8, 8, "#ffe45c");
+}
 
-  drawPixelRect(x - 20, y - 4 + flap, 18, 12, el.wing);
-  drawPixelRect(x + 2, y - 4 - flap, 18, 12, el.wing);
+function drawHabitat(x, y) {
+  const p = iso(x, y);
 
-  drawPixelRect(x - 14, y - 10, 28, 24, el.body);
-  drawPixelRect(x + 10, y - 18, 18, 16, el.body);
+  pxRect(p.x - 28, p.y - 18, 56, 34, "#8b5b2d");
+  pxRect(p.x - 22, p.y - 34, 44, 18, "#ffd27a");
+  pxRect(p.x - 14, p.y - 8, 28, 18, "#ffefbf");
 
-  drawPixelRect(x + 24, y - 22, 6, 6, el.horn);
-  drawPixelRect(x + 18, y - 24, 6, 6, el.horn);
+  ctx.strokeStyle = "rgba(70,40,20,.55)";
+  ctx.strokeRect(p.x - 28, p.y - 18, 56, 34);
+}
 
-  drawPixelRect(x + 22, y - 12, 4, 4, "#111");
-  drawPixelRect(x - 20, y + 2, 8, 8, el.body);
-  drawPixelRect(x - 28, y + 6, 8, 8, el.body);
+function drawDragon(d) {
+  const p = iso(d.x, d.y);
+  const colors = elements[d.el];
+  const flap = Math.sin(time * .15 + d.seed) * 5;
+  const bob = Math.sin(time * .08 + d.seed) * 4;
 
-  drawPixelRect(x - 8, y + 14, 6, 10, "#333");
-  drawPixelRect(x + 6, y + 14, 6, 10, "#333");
+  const x = p.x;
+  const y = p.y - 30 + bob;
+
+  pxRect(x - 24, y - 2 + flap, 16, 10, colors[1]);
+  pxRect(x + 8, y - 2 - flap, 16, 10, colors[1]);
+
+  pxRect(x - 14, y - 10, 28, 22, colors[0]);
+  pxRect(x + 10, y - 20, 18, 14, colors[0]);
+
+  pxRect(x + 23, y - 24, 5, 5, "#fff2a0");
+  pxRect(x + 18, y - 25, 5, 5, "#fff2a0");
+
+  pxRect(x + 22, y - 14, 4, 4, "#111");
+
+  pxRect(x - 22, y + 4, 10, 8, colors[0]);
+  pxRect(x - 30, y + 8, 8, 8, colors[0]);
 
   ctx.fillStyle = "rgba(0,0,0,.18)";
   ctx.beginPath();
-  ctx.ellipse(x, y + 25, 24, 8, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + 28, 25, 7, 0, 0, Math.PI * 2);
   ctx.fill();
 }
 
-function drawCloud(x, y, s) {
-  ctx.fillStyle = "rgba(255,255,255,.85)";
-  ctx.fillRect(x, y, 60 * s, 18 * s);
-  ctx.fillRect(x + 16 * s, y - 12 * s, 28 * s, 18 * s);
-  ctx.fillRect(x + 42 * s, y - 6 * s, 28 * s, 18 * s);
-}
-
-function drawBackground() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  sky.addColorStop(0, "#64cfff");
-  sky.addColorStop(.55, "#bff5ff");
-  sky.addColorStop(1, "#6fd95a");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  drawPixelRect(780, 40, 70, 70, "#fff05a");
-  drawCloud(130, 48, 1);
-  drawCloud(640, 88, .8);
-
-  drawPixelRect(70, 38, 820, 560, "rgba(255,255,255,.18)");
-  drawPixelRect(80, 48, 800, 540, "rgba(50,150,70,.18)");
+function drawObject(x, y, type) {
+  if (type === "tree") drawTree(x, y);
+  if (type === "rock") drawRock(x, y);
+  if (type === "flower") drawFlower(x, y);
+  if (type === "habitat") drawHabitat(x, y);
 }
 
 function drawParticles() {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-
     p.y -= p.vy;
     p.life--;
 
-    ctx.globalAlpha = p.life / 40;
-    drawPixelRect(p.x, p.y, 6, 6, p.color);
+    ctx.globalAlpha = p.life / 30;
+    pxRect(p.x, p.y, 6, 6, p.color);
     ctx.globalAlpha = 1;
 
-    if (p.life <= 0) {
-      particles.splice(i, 1);
-    }
+    if (p.life <= 0) particles.splice(i, 1);
   }
 }
 
-function drawSelectedGhost() {
-  if (!selectedBuy) return;
-
-  ctx.fillStyle = "rgba(255,255,255,.85)";
-  ctx.font = "bold 18px Arial";
-  ctx.fillText(
-    selectedBuy === "habitat"
-      ? "Habitat yerleştirmek için tile seç"
-      : "Ejderha almak için habitat seç",
-    96,
-    36
-  );
-}
-
-function render() {
-  drawBackground();
-
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      drawTile(x, y, map[y][x]);
-    }
-  }
-
-  for (const dragon of dragons) {
-    drawDragon(dragon);
-  }
-
-  drawParticles();
-  drawSelectedGhost();
-}
-
-function spawnParticles(x, y, color) {
-  for (let i = 0; i < 16; i++) {
+function spawnParticles(x,y,color) {
+  for (let i = 0; i < 18; i++) {
     particles.push({
       x: x + Math.random() * 40 - 20,
-      y: y + Math.random() * 20,
-      vy: Math.random() * 1.6 + .4,
-      life: 30 + Math.random() * 20,
+      y: y + Math.random() * 30 - 15,
+      vy: Math.random() * 1.5 + .4,
+      life: 25 + Math.random() * 15,
       color
     });
   }
 }
 
-function placeHabitat(tx, ty) {
-  const tile = map[ty][tx];
+function drawSkyDecor() {
+  ctx.fillStyle = "#ffe65c";
+  ctx.fillRect(W - 120, 70, 54, 54);
 
-  if (tile.habitat) return;
-  if (gold < 150) return alert("Altın yetmiyor kanka.");
-
-  gold -= 150;
-  tile.habitat = "basic";
-
-  spawnParticles(96 + tx * TILE + 32, 64 + ty * TILE + 32, "#ffd45a");
-  updateHud();
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  ctx.fillRect(80, 90, 90, 18);
+  ctx.fillRect(105, 72, 45, 22);
+  ctx.fillRect(W - 280, 130, 80, 18);
 }
 
-function buyDragon(element, tx, ty) {
-  const tile = map[ty][tx];
+function render() {
+  ctx.clearRect(0,0,W,H);
 
-  if (!tile.habitat) return alert("Önce habitat koyman lazım.");
-  if (gems < dragonCost(element)) return alert("Elmas yetmiyor kanka.");
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,"#75d8ff");
+  bg.addColorStop(.55,"#d9fbff");
+  bg.addColorStop(1,"#7de061");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
 
-  gems -= dragonCost(element);
+  drawSkyDecor();
 
-  const px = 96 + tx * TILE + 32;
-  const py = 64 + ty * TILE + 38;
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      drawTile(x,y,map[y][x]);
+    }
+  }
+
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (map[y][x].object) drawObject(x,y,map[y][x].object);
+    }
+  }
+
+  dragons.sort((a,b) => (a.x+a.y)-(b.x+b.y));
+  for (const d of dragons) drawDragon(d);
+
+  drawParticles();
+
+  if (selected) {
+    ctx.fillStyle = "rgba(255,255,255,.9)";
+    ctx.font = "900 18px Arial";
+    ctx.fillText("Seçili: " + selected + " | Tile tıkla", 20, H - 40);
+  }
+}
+
+function screenToIso(mx, my) {
+  const sx = mx - W / 2 - camX;
+  const sy = my - 80 - camY;
+
+  const x = Math.floor((sy / (TILE_H / 2) + sx / (TILE_W / 2)) / 2);
+  const y = Math.floor((sy / (TILE_H / 2) - sx / (TILE_W / 2)) / 2);
+
+  return {x,y};
+}
+
+function buyDragon(el, x, y) {
+  const cost = el === "electric" ? 8 : el === "shadow" ? 10 : 5;
+  if (gem < cost) return alert("Elmas yetmiyor.");
+  if (map[y][x].object !== "habitat") return alert("Ejderha için habitat seç.");
+
+  gem -= cost;
 
   dragons.push({
-    id: Date.now() + Math.random(),
-    element,
-    tileX: tx,
-    tileY: ty,
-    x: px,
-    y: py,
-    targetX: px,
-    targetY: py
+    x, y, el,
+    seed: Math.random() * 1000
   });
 
-  spawnParticles(px, py, elements[element].body);
-  updateHud();
+  const p = iso(x,y);
+  spawnParticles(p.x, p.y - 30, elements[el][0]);
+  hud();
 }
 
-function dragonCost(element) {
-  if (element === "electric") return 8;
-  if (element === "shadow") return 10;
-  return 5;
+function placeHabitat(x, y) {
+  if (gold < 150) return alert("Altın yetmiyor.");
+  if (map[y][x].type === "water") return alert("Suya koyamazsın.");
+  if (map[y][x].object) return alert("Bu tile dolu.");
+
+  gold -= 150;
+  map[y][x].object = "habitat";
+
+  const p = iso(x,y);
+  spawnParticles(p.x, p.y, "#ffd45c");
+  hud();
 }
 
 canvas.addEventListener("click", e => {
-  const { x, y } = screenToTile(e.clientX, e.clientY);
+  if (!selected) return;
 
-  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
+  const {x,y} = screenToIso(e.clientX, e.clientY);
 
-  if (!selectedBuy) return;
+  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return;
 
-  if (selectedBuy === "habitat") {
-    placeHabitat(x, y);
-  } else {
-    buyDragon(selectedBuy, x, y);
-  }
+  if (selected === "habitat") placeHabitat(x,y);
+  else buyDragon(selected,x,y);
 });
 
-canvas.addEventListener("touchstart", e => {
-  const t = e.touches[0];
-  const { x, y } = screenToTile(t.clientX, t.clientY);
+marketBtn.onclick = () => market.classList.remove("hidden");
+closeBtn.onclick = () => market.classList.add("hidden");
 
-  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
-
-  if (!selectedBuy) return;
-
-  if (selectedBuy === "habitat") {
-    placeHabitat(x, y);
-  } else {
-    buyDragon(selectedBuy, x, y);
-  }
-});
-
-marketBtn.onclick = () => {
-  marketPanel.classList.remove("hidden");
-};
-
-closeMarket.onclick = () => {
-  marketPanel.classList.add("hidden");
-};
-
-buyBtns.forEach(btn => {
+document.querySelectorAll("#market button[data-item]").forEach(btn => {
   btn.onclick = () => {
-    selectedBuy = btn.dataset.buy;
-    marketPanel.classList.add("hidden");
+    selected = btn.dataset.item;
+    market.classList.add("hidden");
   };
 });
 
-function passiveIncome() {
+setInterval(() => {
   let habitats = 0;
-
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (map[y][x].habitat) habitats++;
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (map[y][x].object === "habitat") habitats++;
     }
   }
 
-  gold += habitats * 1;
-  food += dragons.length * 0.2;
-  updateHud();
-}
-
-setInterval(passiveIncome, 2000);
-
-function moveDragons() {
-  for (const d of dragons) {
-    if (Math.random() < 0.01) {
-      d.targetX = 96 + d.tileX * TILE + 24 + Math.random() * 18;
-      d.targetY = 64 + d.tileY * TILE + 30 + Math.random() * 18;
-    }
-
-    d.x += (d.targetX - d.x) * 0.02;
-    d.y += (d.targetY - d.y) * 0.02;
-  }
-}
+  gold += habitats * 2;
+  food += dragons.length * .3;
+  hud();
+}, 2000);
 
 function loop() {
   time++;
-  moveDragons();
   render();
   requestAnimationFrame(loop);
 }
 
-updateHud();
+hud();
 loop();
