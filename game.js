@@ -1,37 +1,67 @@
+// ===== CANVAS =====
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
-let TILE = 64;
-let mode = "island";
+// ===== CONFIG =====
+const TILE = 64;
+const MAP_W = 12;
+const MAP_H = 8;
 
+// ===== STATE =====
 let state = {
   gold: 500,
   food: 200,
-  gems: 20,
+  gems: 10,
+  mode: "island",
+  cameraX: 0,
+  cameraY: 0,
   tiles: [],
   dragons: []
 };
 
-// GRID
-for(let y=0;y<6;y++){
-  for(let x=0;x<10;x++){
+// ===== ELEMENT =====
+const ELEMENTS = {
+  fire: {color:"#ff4d4d"},
+  water:{color:"#4da6ff"},
+  nature:{color:"#4dff88"}
+};
+
+// ===== ISO CONVERT =====
+function iso(x,y){
+  return {
+    x:(x - y) * TILE/2,
+    y:(x + y) * TILE/4
+  };
+}
+
+// ===== GRID CREATE =====
+for(let y=0;y<MAP_H;y++){
+  for(let x=0;x<MAP_W;x++){
     state.tiles.push({
-      x:x*TILE+50,
-      y:y*TILE+100,
+      gx:x,
+      gy:y,
       type:"grass"
     });
   }
 }
 
-// EJDERHA
-state.dragons.push({
-  x:200,
-  y:250,
-  color:"#ff4d4d"
-});
+// ===== DRAGON =====
+function createDragon(gx,gy){
+  let keys = Object.keys(ELEMENTS);
+  let e = keys[Math.random()*keys.length|0];
 
-// DRAW
+  return {
+    gx, gy,
+    element:e,
+    level:1,
+    anim:0
+  };
+}
+
+state.dragons.push(createDragon(3,3));
+
+// ===== DRAW UTILS =====
 function rect(x,y,w,h,c){
   ctx.fillStyle=c;
   ctx.fillRect(x,y,w,h);
@@ -43,127 +73,118 @@ function text(t,x,y,c="#000",s=16){
   ctx.fillText(t,x,y);
 }
 
-// UI
-function drawUI(){
-  rect(0,0,1024,60,"#ffffffdd");
-
-  text("Altın: "+state.gold,20,35);
-  text("Yemek: "+state.food,200,35);
-  text("Elmas: "+state.gems,380,35);
-
-  // MARKET BUTON
-  rect(820,10,180,40,"#2ecc71");
-  text("MARKET",850,35,"#fff");
-}
-
-// TILE
-function drawTiles(){
-  state.tiles.forEach(t=>{
-    if(t.type==="grass"){
-      rect(t.x,t.y,TILE,TILE,"#6ab04c");
-    }
-
-    if(t.type==="habitat"){
-      rect(t.x,t.y,TILE,TILE,"#c7a66a");
-      rect(t.x+10,t.y+10,44,44,"#8b5a2b");
-    }
-  });
-}
-
-// EJDERHA
-function drawDragon(d){
-  let flap=Math.sin(Date.now()/150)*4;
-
-  rect(d.x,d.y,40,20,d.color);
-  rect(d.x+10,d.y-10+flap,20,10,"orange");
-}
-
-// DÜNYA
+// ===== WORLD =====
 function drawWorld(){
-  let g=ctx.createLinearGradient(0,0,0,600);
+  let g = ctx.createLinearGradient(0,0,0,576);
   g.addColorStop(0,"#79d8ff");
   g.addColorStop(1,"#e6f7ff");
 
   ctx.fillStyle=g;
-  ctx.fillRect(0,0,1024,576);
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
   // güneş
-  rect(850,50,50,50,"#FFD93D");
-
-  // zemin
-  rect(0,450,1024,126,"#6ab04c");
+  rect(900,50,50,50,"#FFD93D");
 }
 
-// MARKET
-function drawMarket(){
-  rect(0,0,1024,576,"#ffffff");
+// ===== TILE DRAW =====
+function drawTile(tile){
+  let p = iso(tile.gx, tile.gy);
 
-  text("MARKET",450,80,"#000",28);
+  let x = p.x + 512;
+  let y = p.y + 100;
 
-  // YUVA
-  rect(200,150,200,100,"#6ab04c");
-  text("Yuva Satın Al",210,200);
-  text("100 Altın",210,230);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x+32, y+16);
+  ctx.lineTo(x, y+32);
+  ctx.lineTo(x-32, y+16);
+  ctx.closePath();
 
-  // GERİ
-  rect(800,20,180,50,"#e74c3c");
-  text("GERİ",840,55,"#fff");
+  ctx.fillStyle = tile.type === "grass" ? "#6ab04c" : "#c7a66a";
+  ctx.fill();
+
+  ctx.strokeStyle="#00000022";
+  ctx.stroke();
+
+  // habitat üst yapı
+  if(tile.type === "habitat"){
+    rect(x-12,y+5,24,20,"#8b5a2b");
+  }
 }
 
-// CLICK
-canvas.onclick=e=>{
+// ===== DRAGON DRAW =====
+function drawDragon(d){
+  let p = iso(d.gx, d.gy);
+  let x = p.x + 512;
+  let y = p.y + 80;
+
+  let e = ELEMENTS[d.element];
+
+  d.anim += 0.1;
+  let flap = Math.sin(d.anim)*4;
+
+  // gövde
+  rect(x-10,y,20,12,e.color);
+
+  // kanat
+  rect(x-5,y-8+flap,10,8,"white");
+
+  // göz
+  rect(x+5,y+3,2,2,"black");
+}
+
+// ===== UI =====
+function drawUI(){
+  rect(0,0,canvas.width,60,"#ffffffdd");
+
+  text("Altın: "+state.gold,20,35);
+  text("Yemek: "+state.food,180,35);
+  text("Elmas: "+state.gems,340,35);
+
+  rect(820,10,180,40,"#2ecc71");
+  text("MARKET",850,35,"#fff");
+}
+
+// ===== CLICK =====
+canvas.onclick = e=>{
   let r=canvas.getBoundingClientRect();
-  let mx=(e.clientX-r.left)*1024/r.width;
-  let my=(e.clientY-r.top)*576/r.height;
+  let mx=(e.clientX-r.left)*canvas.width/r.width;
+  let my=(e.clientY-r.top)*canvas.height/r.height;
 
-  if(mode==="island"){
-    // market
+  if(state.mode === "island"){
+
+    // MARKET
     if(mx>820 && my<60){
-      mode="market";
+      state.mode = "market";
+      return;
     }
 
-    // tile yerleştirme
+    // TILE SELECT
     state.tiles.forEach(t=>{
-      if(mx>t.x && mx<t.x+TILE && my>t.y && my<t.y+TILE){
-        if(state.gold>=100){
-          t.type="habitat";
-          state.gold-=100;
+      let p = iso(t.gx, t.gy);
+      let tx = p.x + 512;
+      let ty = p.y + 100;
+
+      if(Math.abs(mx - tx) < 30 && Math.abs(my - ty) < 30){
+        if(state.gold >= 100){
+          t.type = "habitat";
+          state.gold -= 100;
+
+          state.dragons.push(createDragon(t.gx,t.gy));
         }
       }
     });
   }
-
-  else if(mode==="market"){
-    // yuva satın alma
-    if(mx>200 && mx<400 && my>150 && my<250){
-      if(state.gold>=100){
-        state.gold-=100;
-
-        // boş tile bul
-        let empty = state.tiles.find(t=>t.type==="grass");
-        if(empty) empty.type="habitat";
-      }
-    }
-
-    // geri
-    if(mx>800 && my<70){
-      mode="island";
-    }
-  }
 };
 
-// LOOP
+// ===== LOOP =====
 function loop(){
   drawWorld();
 
-  if(mode==="island"){
-    drawTiles();
+  if(state.mode === "island"){
+    state.tiles.forEach(drawTile);
     state.dragons.forEach(drawDragon);
     drawUI();
-  }
-
-  if(mode==="market"){
-    drawMarket();
   }
 
   requestAnimationFrame(loop);
