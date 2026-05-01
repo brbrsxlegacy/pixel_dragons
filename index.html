@@ -1,74 +1,38 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pixel Dragon Island</title>
-  <link rel="stylesheet" href="style.css"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixel Dragon Island L2</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div id="gameWrap">
-    <header id="topBar">
-      <div class="logo">🐉 Pixel Dragon Island</div>
-
-      <div class="moneyBox">
-        <span>🪙 <b id="goldText">500</b></span>
-        <span>🍖 <b id="foodText">100</b></span>
-        <span>💎 <b id="gemText">25</b></span>
-      </div>
-
-      <button id="marketBtn">MARKET</button>
-    </header>
-
-    <main id="gameArea">
-      <canvas id="gameCanvas" width="960" height="640"></canvas>
-    </main>
-
-    <div id="hint">
-      Tile seç → Habitat koy → Ejderha al → Adada yaşasın
-    </div>
+<div id="ui">
+  <div class="title">🐉 Pixel Dragon Island</div>
+  <div class="wallet">
+    🪙 <span id="gold">800</span>
+    🍖 <span id="food">150</span>
+    💎 <span id="gem">30</span>
   </div>
+  <button id="marketBtn">MARKET</button>
+</div>
 
-  <div id="marketPanel" class="hidden">
-    <div class="marketHeader">
-      <h2>MARKET</h2>
-      <button id="closeMarket">X</button>
-    </div>
+<canvas id="game"></canvas>
 
-    <div class="marketGrid">
-      <button class="buyBtn" data-buy="habitat">
-        <b>Habitat</b>
-        <span>150 Altın</span>
-      </button>
+<div id="market" class="hidden">
+  <h2>Market</h2>
+  <button data-item="habitat">Habitat - 150 🪙</button>
+  <button data-item="fire">Ateş Ejderhası - 5 💎</button>
+  <button data-item="water">Su Ejderhası - 5 💎</button>
+  <button data-item="nature">Doğa Ejderhası - 5 💎</button>
+  <button data-item="electric">Elektrik Ejderhası - 8 💎</button>
+  <button data-item="shadow">Gölge Ejderhası - 10 💎</button>
+  <button id="closeBtn">Kapat</button>
+</div>
 
-      <button class="buyBtn" data-buy="fire">
-        <b>Ateş Ejderhası</b>
-        <span>5 Elmas</span>
-      </button>
+<div id="info">Market’ten seçim yap, adadaki kareye tıkla.</div>
 
-      <button class="buyBtn" data-buy="water">
-        <b>Su Ejderhası</b>
-        <span>5 Elmas</span>
-      </button>
-
-      <button class="buyBtn" data-buy="nature">
-        <b>Doğa Ejderhası</b>
-        <span>5 Elmas</span>
-      </button>
-
-      <button class="buyBtn" data-buy="electric">
-        <b>Elektrik Ejderhası</b>
-        <span>8 Elmas</span>
-      </button>
-
-      <button class="buyBtn" data-buy="shadow">
-        <b>Gölge Ejderhası</b>
-        <span>10 Elmas</span>
-      </button>
-    </div>
-  </div>
-
-  <script src="game.js"></script>
+<script src="game.js"></script>
 </body>
 </html>
